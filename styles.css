@@ -1,0 +1,21 @@
+/* styles.css */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f3f4f6;
+}
+
+.bg-blue-500 {
+    background-color: #3b82f6;
+}
+
+.form-group {
+    @apply mb-4;
+}
+
+.input-field {
+    @apply border rounded p-2 w-full;
+}
+
+.button {
+    @apply bg-blue-500 text-white p-2 rounded hover:bg-blue-600;
+}
