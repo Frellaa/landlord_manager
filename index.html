@@ -5,26 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Landlord Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        body {
+            background-color: #f3f4f6; /* Light gray background */
+            font-family: 'Arial', sans-serif;
+        }
+        .container {
+            max-width: 800px; /* Limit width for better readability */
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .input-field {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #d1d5db;
+        }
+        .button {
+            background-color: #3b82f6; /* Blue button */
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #2563eb; /* Darker blue on hover */
+        }
+    </style>
 </head>
-<body class="bg-gray-100 font-sans">
-    <nav class="bg-blue-500 text-white p-4">
+<body class="bg-gray-100 p-4">
+    <nav id="nav" class="bg-blue-500 text-white p-4 rounded mb-4 hidden">
         <ul class="flex space-x-4">
-            <li><a href="#settings" class="hover:text-gray-300">Settings</a></li>
-            <li><a href="#tenants" class="hover:text-gray-300">Tenants</a></li>
-            <li><a href="#utilities" class="hover:text-gray-300">Utilities</a></li>
-            <li><a href="#invoices" class="hover:text-gray-300">Invoices</a></li>
-            <li><a href="#overview" class="hover:text-gray-300">Overview</a></li>
+            <li><a href="#settings" class="hover:underline">Settings</a></li>
+            <li><a href="#tenants" class="hover:underline">Tenants</a></li>
+            <li><a href="#payments" class="hover:underline">Payments</a></li>
+            <li><a href="#overview" class="hover:underline">Overview</a></li>
+            <li><a href="#logout" class="hover:underline" onclick="logout()">Logout</a></li>
         </ul>
     </nav>
-
-    <div id="content" class="p-4">
-        <!-- Content will be injected here via JavaScript -->
-    </div>
-
+    <div id="content" class="container mx-auto bg-white p-6 rounded-lg shadow-md"></div>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
