@@ -291,6 +291,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'overview':
                 html = `
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Room Availability Overview</h2>
+                    <div class="mb-4">
+                             <label class="block mb-1 text-gray-700">Select Month:</label>
+                            <input type="text" id="monthPicker" class="input-field calendar-month" placeholder="YYYY-MM" required>
+                    </div>        
                     <div class="space-y-8">
                         ${(storage.houses || []).map(h => `
                             <div class="bg-white p-4 rounded-lg shadow-md">
@@ -387,30 +391,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render calendars for each house in the Overview section
         if (section === 'overview') {
-            (storage.houses || []).forEach(house => {
-                renderCalendar(house.address);
-            });
+            const monthPicker = document.getElementById('monthPicker');
+            if (monthPicker) {
+                flatpickr(monthPicker, {
+                    dateFormat: 'Y-m',
+                    mode: 'single',
+                    defaultDate: "today",
+                    onChange: (selectedDates, dateStr) => {
+                        if (dateStr) {
+                            const [year, month] = dateStr.split('-').map(Number);
+                            (storage.houses || []).forEach(house => {
+                                renderCalendar(house.address, year, month - 1); // month is 0-indexed in JavaScript
+                            });
+                        }
+                    }
+                });
+        
+                // Render the calendar for the current month initially
+                const currentDate = new Date();
+                const currentYear = currentDate.getFullYear();
+                const currentMonth = currentDate.getMonth();
+                (storage.houses || []).forEach(house => {
+                    renderCalendar(house.address, currentYear, currentMonth);
+                });
+            }
         }
 
-        function renderCalendar(houseAddress) {
+        function renderCalendar(houseAddress, year, month) {
             const house = (storage.houses || []).find(h => h.address === houseAddress);
             if (!house) return;
-
-            const currentDate = new Date(2025, 2, 1); // March 1, 2025
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
+        
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const firstDay = new Date(year, month, 1).getDay();
-
+        
             const calendar = document.getElementById(`calendar-${houseAddress}`);
             const legend = document.getElementById(`color-legend-${houseAddress}`);
-
+        
             const roomColors = {};
             (house.rooms || []).forEach((room, index) => {
                 const hue = (index * 60) % 360;
                 roomColors[room.number] = `hsl(${hue}, 70%, 50%)`;
             });
-
+        
             let calendarHtml = `
                 <table class="w-full border-collapse border border-gray-300">
                     <thead>
@@ -431,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </thead>
                     <tbody>
             `;
-
+        
             let day = 1;
             for (let i = 0; i < 6; i++) {
                 calendarHtml += '<tr>';
@@ -442,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const currentDate = new Date(year, month, day);
                         let cellContent = day;
                         let cellStyle = '';
-
+        
                         const occupiedRooms = {};
                         (house.rooms || []).forEach(room => {
                             const tenantsInRoom = (storage.tenants || []).filter(t => 
@@ -459,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 };
                             }
                         });
-
+        
                         if (Object.keys(occupiedRooms).length > 0) {
                             const numRooms = Object.keys(occupiedRooms).length;
                             let backgroundColors = '';
@@ -475,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             cellStyle = `background: linear-gradient(to right, ${backgroundColors}); color: black;`;
                             cellContent += `<br>${tenantList}`;
                         }
-
+        
                         calendarHtml += `<td class="border border-gray-300 p-2" style="${cellStyle}">${cellContent}</td>`;
                         day++;
                     }
@@ -484,16 +506,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (day > daysInMonth) break;
             }
             calendarHtml += '</tbody></table>';
-
+        
             if (calendar) calendar.innerHTML = calendarHtml;
-
+        
             let legendHtml = '<h4 class="text-sm font-semibold text-gray-700 mb-2">Room Color Codes:</h4><ul class="list-disc pl-5">';
             (house.rooms || []).forEach(room => {
                 const color = roomColors[room.number];
                 legendHtml += `<li style="color: ${color};">Room ${room.number} - Capacity: ${room.capacity || 'Not set'}, Occupants: ${(room.occupants || []).length}</li>`;
             });
             legendHtml += '</ul>';
-
+        
             if (legend) legend.innerHTML = legendHtml;
         }
 
