@@ -1,4 +1,29 @@
-//localStorage.clear()
+//python -m http.server 8080
+//localStorage.clear();
+
+// Ensure this script is loaded as a module in your HTML:
+// <script type="module" src="script.js"></script>
+
+// Import Firebase modular APIs
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
+
+// Initialize Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyCmJJB9BcRazKw46SRHlG4DWji2kruqRp4",
+    authDomain: "landlord-8b412.firebaseapp.com",
+    databaseURL: "https://landlord-8b412-default-rtdb.firebaseio.com",
+    projectId: "landlord-8b412",
+    storageBucket: "landlord-8b412.firebasestorage.app",
+    messagingSenderId: "688578649227",
+    appId: "1:688578649227:web:ddda49059a64667b13c88e",
+    measurementId: "G-4TBCEREMF3"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const database = getDatabase(app);
 
 document.addEventListener('DOMContentLoaded', () => {
     const content = document.getElementById('content');
@@ -7,21 +32,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('DOM fully loaded');
 
-    // Check if user is logged in, otherwise show login/register
-    let currentUser = localStorage.getItem('currentUser');
-    if (!currentUser) {
-        console.log('No current user, showing auth');
-        showAuth();
-    } else {
-        console.log(`User logged in: ${currentUser}`);
-        nav.classList.remove('hidden');
-        loadUserData(currentUser);
-        showSection('settings');
-    }
+    // Check if user is logged in
+    let currentUser = null;
+    onAuthStateChanged(auth, user => {
+        if (user) {
+            currentUser = user.uid;
+            console.log(`User logged in: ${currentUser}`);
+            nav.classList.remove('hidden');
+            loadUserData(currentUser).then(() => showSection('settings'));
+        } else {
+            console.log('No current user, showing auth');
+            currentUser = null;
+            showAuth();
+        }
+    });
 
-    function saveData(username) {
-        if (!username) {
-            console.error('No username provided for saving data');
+    async function saveData(userId) {
+        if (!userId) {
+            console.error('No user ID provided for saving data');
             return;
         }
         const userData = {
@@ -30,21 +58,30 @@ document.addEventListener('DOMContentLoaded', () => {
             payments: storage.payments,
             invoices: storage.invoices,
         };
-        localStorage.setItem(`user_${username}_data`, JSON.stringify(userData));
-        console.log(`Data saved for user: ${username}`);
+        try {
+            await set(ref(database, `users/${userId}/data`), userData);
+            console.log(`Data saved for user: ${userId}`);
+        } catch (error) {
+            console.error('Error saving data to Firebase:', error);
+        }
     }
 
-    function loadUserData(username) {
-        if (!username) {
-            console.error('No username provided for loading data');
+    async function loadUserData(userId) {
+        if (!userId) {
+            console.error('No user ID provided for loading data');
             return;
         }
-        const userData = JSON.parse(localStorage.getItem(`user_${username}_data`) || '{}');
-        storage.houses = userData.houses || [];
-        storage.tenants = userData.tenants || [];
-        storage.payments = userData.payments || [];
-        storage.invoices = userData.invoices || [];
-        console.log(`Data loaded for user: ${username}`, storage);
+        try {
+            const snapshot = await get(ref(database, `users/${userId}/data`));
+            const userData = snapshot.val() || {};
+            storage.houses = userData.houses || [];
+            storage.tenants = userData.tenants || [];
+            storage.payments = userData.payments || [];
+            storage.invoices = userData.invoices || [];
+            console.log(`Data loaded for user: ${userId}`, storage);
+        } catch (error) {
+            console.error('Error loading data from Firebase:', error);
+        }
     }
 
     const storage = {
@@ -67,8 +104,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Login</h2>
                     <form id="loginForm" class="mt-4 bg-white p-4 rounded-lg shadow-md">
                         <div class="form-group mb-4">
-                            <label class="block mb-1 text-gray-700">Username:</label>
-                            <input type="text" id="loginUsername" class="input-field border-gray-300 focus:border-blue-500" required>
+                            <label class="block mb-1 text-gray-700">Email:</label>
+                            <input type="email" id="loginEmail" class="input-field border-gray-300 focus:border-blue-500" required>
                         </div>
                         <div class="form-group mb-4">
                             <label class="block mb-1 text-gray-700">Password:</label>
@@ -84,8 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Register</h2>
                     <form id="registerForm" class="mt-4 bg-white p-4 rounded-lg shadow-md">
                         <div class="form-group mb-4">
-                            <label class="block mb-1 text-gray-700">Username:</label>
-                            <input type="text" id="registerUsername" class="input-field border-gray-300 focus:border-blue-500" required>
+                            <label class="block mb-1 text-gray-700">Email:</label>
+                            <input type="email" id="registerEmail" class="input-field border-gray-300 focus:border-blue-500" required>
                         </div>
                         <div class="form-group mb-4">
                             <label class="block mb-1 text-gray-700">Password:</label>
@@ -108,14 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     </form>
                     <h3 class="text-xl mt-6 mb-2 font-semibold text-gray-800">Existing Houses</h3>
                     <ul id="housesList" class="list-disc pl-5 space-y-4">
-                        ${storage.houses.map(h => `
+                        ${(storage.houses || []).map(h => `
                             <li class="bg-white p-4 rounded-lg shadow-md">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-gray-800">${h.address} - ${h.rooms.length} rooms</span>
+                                    <span class="text-gray-800">${h.address} - ${(h.rooms || []).length} rooms</span>
                                     <button class="ml-2 text-red-500 hover:text-red-700" onclick="removeHouse('${h.address}')">Remove</button>
                                 </div>
                                 <ul class="list-disc pl-5 mt-2 space-y-2">
-                                    ${h.rooms.map(r => `<li class="text-gray-700">Room ${r.number} (Capacity: ${r.capacity || 'Not set'}, Occupants: ${r.occupants.length})</li>`).join('')}
+                                    ${(h.rooms || []).map(r => `<li class="text-gray-700">Room ${r.number} (Capacity: ${r.capacity || 'Not set'}, Occupants: ${(r.occupants || []).length})</li>`).join('')}
                                 </ul>
                                 <form class="mt-4" id="addRoomForm-${h.address}">
                                     <div class="form-group mb-2">
@@ -137,10 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Tenants</h2>
                     <ul id="tenantsList" class="list-disc pl-5 space-y-4">
-                        ${storage.tenants.map(t => `
+                        ${(storage.tenants || []).map(t => `
                             <li class="bg-white p-4 rounded-lg shadow-md">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-gray-700">${t.name} - Stay: ${t.startDate} to ${t.endDate || 'Ongoing'} - House: ${t.house}, Room: ${t.room}, Rent: ${t.rent || 0}€, Roommates: ${t.roommates?.join(', ') || 'None'}</span>
+                                    <span class="text-gray-700">${t.name} - Stay: ${t.startDate} to ${t.endDate || 'Ongoing'} - House: ${t.house}, Room: ${t.room}, Rent: ${t.rent || 0}€, Roommates: ${(t.roommates || []).join(', ') || 'None'}</span>
                                     <button class="ml-2 text-red-500 hover:text-red-700" onclick="removeTenant('${t.name}', '${t.house}', '${t.room}')">Remove</button>
                                 </div>
                             </li>
@@ -163,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <label class="block mb-1 text-gray-700">House:</label>
                             <select id="tenantHouse" class="input-field" required>
                                 <option value="">Select House</option>
-                                ${storage.houses.map(h => `<option value="${h.address}">${h.address}</option>`).join('')}
+                                ${(storage.houses || []).map(h => `<option value="${h.address}">${h.address}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group mb-2">
@@ -188,8 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Payments</h2>
                     <div id="monthlyArchives" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-                        ${[...new Set(storage.payments.map(p => p.monthYear))]
-                            .filter(monthYear => monthYear && storage.payments.some(p => p.monthYear === monthYear))
+                        ${[...new Set((storage.payments || []).map(p => p.monthYear))]
+                            .filter(monthYear => monthYear && (storage.payments || []).some(p => p.monthYear === monthYear))
                             .map(monthYear => `
                                 <div class="bg-white p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-100" onclick="showMonthlyPayments('${monthYear}')">
                                     <h3 class="text-lg font-semibold text-gray-800">Month: ${monthYear}</h3>
@@ -197,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             `).join('')}
                     </div>
                     <ul id="paymentsList" class="space-y-4">
-                        ${storage.houses.map(h => `
+                        ${(storage.houses || []).map(h => `
                             <li class="bg-white p-4 rounded-lg shadow-md">
                                 <h3 class="text-lg font-semibold text-gray-800 mb-2">${h.address}</h3>
                                 <div class="space-y-4">
@@ -232,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Invoices</h2>
                     <ul id="invoicesList" class="list-disc pl-5 space-y-4">
-                        ${storage.invoices.map(i => `<li class="bg-white p-4 rounded-lg shadow-md text-gray-700">${i.type} - ${i.amount || 0}€ - Paid: ${i.paid ? 'Yes' : 'No'}</li>`).join('')}
+                        ${(storage.invoices || []).map(i => `<li class="bg-white p-4 rounded-lg shadow-md text-gray-700">${i.type} - ${i.amount || 0}€ - Paid: ${i.paid ? 'Yes' : 'No'}</li>`).join('')}
                     </ul>
                     <form id="addInvoiceForm" class="mt-4 bg-white p-4 rounded-lg shadow-md">
                         <div class="form-group mb-2">
@@ -255,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html = `
                     <h2 class="text-2xl mb-4 font-bold text-gray-800">Room Availability Overview</h2>
                     <div class="space-y-8">
-                        ${storage.houses.map(h => `
+                        ${(storage.houses || []).map(h => `
                             <div class="bg-white p-4 rounded-lg shadow-md">
                                 <h3 class="text-lg font-semibold text-gray-800 mb-2">${h.address}</h3>
                                 <div id="calendar-${h.address}" class="calendar mb-4"></div>
@@ -268,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         content.innerHTML = html;
 
-        // Add event listeners after rendering content to ensure elements exist
+        // Add event listeners after rendering content
         flatpickr('.calendar', { dateFormat: 'Y-m-d' });
         flatpickr('.calendar-month', { 
             dateFormat: 'Y-m', 
@@ -276,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             defaultDate: "today"
         });
 
-        // Handle authentication links dynamically
+        // Handle authentication links
         const registerLink = document.getElementById('registerLink');
         if (registerLink) {
             registerLink.addEventListener('click', (e) => {
@@ -299,25 +336,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (section === 'login') {
             const loginForm = document.getElementById('loginForm');
             if (loginForm) {
-                loginForm.addEventListener('submit', (e) => {
+                loginForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const username = document.getElementById('loginUsername')?.value.trim();
+                    const email = document.getElementById('loginEmail')?.value.trim();
                     const password = document.getElementById('loginPassword')?.value;
 
-                    if (!username || !password) {
-                        alert('Please enter both username and password.');
+                    if (!email || !password) {
+                        alert('Please enter both email and password.');
                         return;
                     }
 
-                    const users = JSON.parse(localStorage.getItem('users') || '{}');
-                    if (users[username] && users[username] === password) {
-                        currentUser = username;
-                        localStorage.setItem('currentUser', username);
-                        nav.classList.remove('hidden');
-                        loadUserData(username);
-                        showSection('settings');
-                    } else {
-                        alert('Invalid username or password.');
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                        // onAuthStateChanged will handle navigation
+                    } catch (error) {
+                        alert('Login failed: ' + error.message);
                     }
                 });
             }
@@ -326,66 +359,58 @@ document.addEventListener('DOMContentLoaded', () => {
         if (section === 'register') {
             const registerForm = document.getElementById('registerForm');
             if (registerForm) {
-                registerForm.addEventListener('submit', (e) => {
+                registerForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const username = document.getElementById('registerUsername')?.value.trim();
+                    const email = document.getElementById('registerEmail')?.value.trim();
                     const password = document.getElementById('registerPassword')?.value;
 
-                    if (!username || !password) {
-                        alert('Please enter both username and password.');
+                    if (!email || !password) {
+                        alert('Please enter both email and password.');
                         return;
                     }
 
-                    const users = JSON.parse(localStorage.getItem('users') || '{}');
-                    if (users[username]) {
-                        alert('Username already exists.');
-                        return;
+                    try {
+                        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                        currentUser = userCredential.user.uid;
+                        storage.houses = [];
+                        storage.tenants = [];
+                        storage.payments = [];
+                        storage.invoices = [];
+                        await saveData(currentUser);
+                        // onAuthStateChanged will handle navigation
+                    } catch (error) {
+                        alert('Registration failed: ' + error.message);
                     }
-
-                    users[username] = password;
-                    localStorage.setItem('users', JSON.stringify(users));
-                    currentUser = username;
-                    localStorage.setItem('currentUser', username);
-                    storage.houses = [];
-                    storage.tenants = [];
-                    storage.payments = [];
-                    storage.invoices = [];
-                    saveData(currentUser);
-                    nav.classList.remove('hidden');
-                    showSection('settings');
                 });
             }
         }
 
         // Render calendars for each house in the Overview section
         if (section === 'overview') {
-            storage.houses.forEach(house => {
+            (storage.houses || []).forEach(house => {
                 renderCalendar(house.address);
             });
         }
 
         function renderCalendar(houseAddress) {
-            const house = storage.houses.find(h => h.address === houseAddress);
+            const house = (storage.houses || []).find(h => h.address === houseAddress);
             if (!house) return;
 
-            const currentDate = new Date(2025, 2, 1); // March 1, 2025 (current date as specified)
+            const currentDate = new Date(2025, 2, 1); // March 1, 2025
             const year = currentDate.getFullYear();
-            const month = currentDate.getMonth(); // March 2025 is month 2 (0-based)
+            const month = currentDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const firstDay = new Date(year, month, 1).getDay(); // 0 (Sunday) to 6 (Saturday)
+            const firstDay = new Date(year, month, 1).getDay();
 
             const calendar = document.getElementById(`calendar-${houseAddress}`);
             const legend = document.getElementById(`color-legend-${houseAddress}`);
 
-            // Generate color for each room (using a simple color generator for uniqueness)
             const roomColors = {};
-            house.rooms.forEach((room, index) => {
-                // Generate a unique color for each room (e.g., using HSL for distinct colors)
-                const hue = (index * 60) % 360; // Spread colors evenly across the hue spectrum
+            (house.rooms || []).forEach((room, index) => {
+                const hue = (index * 60) % 360;
                 roomColors[room.number] = `hsl(${hue}, 70%, 50%)`;
             });
 
-            // Create calendar HTML
             let calendarHtml = `
                 <table class="w-full border-collapse border border-gray-300">
                     <thead>
@@ -408,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
 
             let day = 1;
-            for (let i = 0; i < 6; i++) { // Up to 6 weeks max
+            for (let i = 0; i < 6; i++) {
                 calendarHtml += '<tr>';
                 for (let j = 0; j < 7; j++) {
                     if ((i === 0 && j < firstDay) || day > daysInMonth) {
@@ -418,18 +443,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         let cellContent = day;
                         let cellStyle = '';
 
-                        // Check for tenants staying in rooms on this date, allowing multiple rooms/tenants
                         const occupiedRooms = {};
-                        house.rooms.forEach(room => {
-                            const tenantsInRoom = storage.tenants.filter(t => 
+                        (house.rooms || []).forEach(room => {
+                            const tenantsInRoom = (storage.tenants || []).filter(t => 
                                 t.house === houseAddress && 
                                 t.room === room.number && 
                                 new Date(t.startDate) <= currentDate && 
                                 (!t.endDate || new Date(t.endDate) >= currentDate)
                             );
-
                             if (tenantsInRoom.length > 0) {
-                                // If room capacity allows multiple tenants or single tenant, use the room's color
                                 const roomColor = roomColors[room.number];
                                 occupiedRooms[room.number] = {
                                     color: roomColor,
@@ -439,21 +461,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
 
                         if (Object.keys(occupiedRooms).length > 0) {
-                            // If multiple rooms are occupied, create a striped background with equal divisions
                             const numRooms = Object.keys(occupiedRooms).length;
                             let backgroundColors = '';
                             let tenantList = '';
-
                             Object.values(occupiedRooms).forEach(({ color, tenants }, index) => {
-                                // Divide the background equally among the number of occupied rooms
                                 const width = `${100 / numRooms}%`;
                                 backgroundColors += `${color} ${width}, `;
-                                // List tenants in black text, each in their room's color
                                 tenants.forEach(tenant => {
                                     tenantList += `<span style="color: ${color};"> ${tenant}</span>`;
                                 });
                             });
-                            backgroundColors = backgroundColors.slice(0, -2); // Remove trailing comma and space
+                            backgroundColors = backgroundColors.slice(0, -2);
                             cellStyle = `background: linear-gradient(to right, ${backgroundColors}); color: black;`;
                             cellContent += `<br>${tenantList}`;
                         }
@@ -469,11 +487,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (calendar) calendar.innerHTML = calendarHtml;
 
-            // Generate color legend
             let legendHtml = '<h4 class="text-sm font-semibold text-gray-700 mb-2">Room Color Codes:</h4><ul class="list-disc pl-5">';
-            house.rooms.forEach(room => {
+            (house.rooms || []).forEach(room => {
                 const color = roomColors[room.number];
-                legendHtml += `<li style="color: ${color};">Room ${room.number} - Capacity: ${room.capacity || 'Not set'}, Occupants: ${room.occupants.length}</li>`;
+                legendHtml += `<li style="color: ${color};">Room ${room.number} - Capacity: ${room.capacity || 'Not set'}, Occupants: ${(room.occupants || []).length}</li>`;
             });
             legendHtml += '</ul>';
 
@@ -485,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const startOfMonth = new Date(year, month - 1, 1);
             const endOfMonth = new Date(year, month, 0);
             
-            const tenants = storage.tenants.filter(t => {
+            const tenants = (storage.tenants || []).filter(t => {
                 const startDate = new Date(t.startDate);
                 const endDate = t.endDate ? new Date(t.endDate) : new Date();
                 return (
@@ -503,7 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
         
-            const existingPayment = storage.payments.find(p => p.house === houseAddress && p.monthYear === selectedMonth);
+            const existingPayment = (storage.payments || []).find(p => p.house === houseAddress && p.monthYear === selectedMonth);
         
             const utilities = ['Hot and Cold Water, Heater', 'Electricity', 'Condominium', 'Garbage', 'WiFi'];
             let tableHtml = `
@@ -518,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <tbody>
                         ${utilities.map(utility => {
                             const utilityKey = utility.replace(/ /g, '-');
-                            const existingBill = existingPayment?.payments.find(p => p.utilityType === utility)?.billAmount || 0;
+                            const existingBill = existingPayment?.payments?.find(p => p.utilityType === utility)?.billAmount || 0;
                             return `
                                 <tr>
                                     <td class="border border-gray-300 p-2">${utility}</td>
@@ -534,9 +551,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             `;
                         }).join('')}
                         ${tenants.map(t => {
-                            const existingRent = existingPayment?.payments.find(p => p.utilityType === `Rent - ${t.name}`)?.billAmount || t.rent || 0;
-                            const isPaid = existingPayment?.payments.find(p => p.utilityType === `Rent - ${t.name}`)?.paid || false;
-                            const amountPaid = existingPayment?.payments.find(p => p.utilityType === `Rent - ${t.name}`)?.amountPaid || 0;
+                            const existingRent = existingPayment?.payments?.find(p => p.utilityType === `Rent - ${t.name}`)?.billAmount || t.rent || 0;
+                            const isPaid = existingPayment?.payments?.find(p => p.utilityType === `Rent - ${t.name}`)?.paid || false;
+                            const amountPaid = existingPayment?.payments?.find(p => p.utilityType === `Rent - ${t.name}`)?.amountPaid || 0;
                             return `
                                 <tr>
                                     <td class="border border-gray-300 p-2">
@@ -604,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function updateTotalBill(houseAddress) {
             const utilities = ['Hot and Cold Water, Heater', 'Electricity', 'Condominium', 'Garbage', 'WiFi'];
-            const tenants = storage.tenants.filter(t => t.house === houseAddress);
+            const tenants = (storage.tenants || []).filter(t => t.house === houseAddress);
             let total = 0;
 
             utilities.forEach(utility => {
@@ -615,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tenants.forEach(t => {
                 const rentInput = document.getElementById(`rent-${houseAddress}-${t.name}`);
-                //total += parseFloat(rentInput?.value) || 0;
+                // total += parseFloat(rentInput?.value) || 0;
             });
 
             const totalBillElement = document.getElementById(`totalBill-${houseAddress}`);
@@ -624,9 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        function savePayment(houseAddress, monthYear) {
+        async function savePayment(houseAddress, monthYear) {
             const utilities = ['Hot-and-Cold-Water,-Heater', 'Electricity', 'Condominium', 'Garbage', 'WiFi'];
-            const tenants = storage.tenants.filter(t => t.house === houseAddress);
+            const tenants = (storage.tenants || []).filter(t => t.house === houseAddress);
 
             const payment = {
                 house: houseAddress,
@@ -647,14 +664,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: new Date().toISOString()
             };
 
-            // Update or add the payment in storage
-            const existingPaymentIndex = storage.payments.findIndex(p => p.house === houseAddress && p.monthYear === monthYear);
+            const existingPaymentIndex = (storage.payments || []).findIndex(p => p.house === houseAddress && p.monthYear === monthYear);
             if (existingPaymentIndex !== -1) {
                 storage.payments[existingPaymentIndex] = payment;
             } else {
                 storage.payments.push(payment);
             }
-            saveData(currentUser);
+            await saveData(currentUser);
             alert(`Payment for ${monthYear} saved!`);
             showSection('payments');
         }
@@ -662,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function renderArchive(houseAddress) {
             const modal = document.getElementById(`archiveModal-${houseAddress}`);
             const archiveList = document.getElementById(`archiveList-${houseAddress}`);
-            const payments = storage.payments.filter(p => p.house === houseAddress);
+            const payments = (storage.payments || []).filter(p => p.house === houseAddress);
 
             let archiveHtml = payments.map(p => `
                 <li class="bg-white p-4 rounded-lg shadow-md mb-4">
@@ -674,13 +690,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         </button>
                     </div>
                     <table class="w-full mt-2">
-                        ${p.payments.map(payment => `
+                        ${(p.payments || []).map(payment => `
                             <tr>
                                 <td class="pr-4">${payment.utilityType}:</td>
-                                <td>${payment.billAmount.toFixed(2)}€</td>
+                                <td>${(payment.billAmount || 0).toFixed(2)}€</td>
                                 ${payment.paid !== undefined ? `
                                     <td class="pl-4">Paid: ${payment.paid ? '✓' : '✗'}</td>
-                                    <td class="pl-4">Amount Paid: ${payment.amountPaid.toFixed(2)}€</td>
+                                    <td class="pl-4">Amount Paid: ${(payment.amountPaid || 0).toFixed(2)}€</td>
                                 ` : ''}
                             </tr>
                         `).join('')}
@@ -695,27 +711,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (section === 'settings') {
-            document.getElementById('addHouseForm')?.addEventListener('submit', (e) => {
+            document.getElementById('addHouseForm')?.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const address = document.getElementById('houseAddress')?.value.trim();
                 if (!address) {
                     alert('Please enter a house address.');
                     return;
                 }
-                if (storage.houses.some(h => h.address === address)) {
+                if ((storage.houses || []).some(h => h.address === address)) {
                     alert('House already exists!');
                     return;
                 }
                 storage.houses.push({ address, rooms: [] });
-                saveData(currentUser);
+                await saveData(currentUser);
                 showSection('settings');
             });
 
-            storage.houses.forEach(house => {
+            (storage.houses || []).forEach(house => {
                 const formId = `addRoomForm-${house.address}`;
                 const form = document.getElementById(formId);
                 if (form) {
-                    form.addEventListener('submit', (e) => {
+                    form.addEventListener('submit', async (e) => {
                         e.preventDefault();
                         const roomNumberInput = form.querySelector('input[type="text"]');
                         const capacityInput = form.querySelector('input[type="number"]');
@@ -727,13 +743,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             return;
                         }
 
-                        if (house.rooms.some(r => r.number === roomNumber)) {
+                        if ((house.rooms || []).some(r => r.number === roomNumber)) {
                             alert('Room already exists!');
                             return;
                         }
 
                         house.rooms.push({ number: roomNumber, capacity, occupants: [] });
-                        saveData(currentUser);
+                        await saveData(currentUser);
                         showSection('settings');
                     });
                 }
@@ -741,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (section === 'tenants') {
-            document.getElementById('addTenantForm')?.addEventListener('submit', (e) => {
+            document.getElementById('addTenantForm')?.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const name = document.getElementById('tenantName')?.value.trim();
                 const startDate = document.getElementById('tenantStartDate')?.value;
@@ -750,63 +766,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 const room = document.getElementById('tenantRoom')?.value;
                 const rent = parseFloat(document.getElementById('tenantRent')?.value);
                 const roommates = document.getElementById('tenantRoommates')?.value.split(',').map(r => r.trim()).filter(r => r);
-        
+
                 if (!name || !startDate || !house || !room || isNaN(rent)) {
                     alert('Please fill in all required fields, including a valid rent amount.');
                     return;
                 }
-        
-                const selectedHouse = storage.houses.find(h => h.address === house);
+
+                const selectedHouse = (storage.houses || []).find(h => h.address === house);
                 if (!selectedHouse) {
                     alert('House not found!');
                     return;
                 }
-        
-                const selectedRoom = selectedHouse.rooms.find(r => r.number === room);
+
+                const selectedRoom = (selectedHouse.rooms || []).find(r => r.number === room);
                 if (!selectedRoom) {
                     alert('Room not found!');
                     return;
                 }
-        
-                // Check for overlapping stay periods
+
                 const newTenantStartDate = new Date(startDate);
                 const newTenantEndDate = endDate ? new Date(endDate) : null;
-        
-                const overlappingTenants = selectedRoom.occupants.filter(occupantName => {
-                    const existingTenant = storage.tenants.find(t => t.name === occupantName && t.house === house && t.room === room);
+
+                const overlappingTenants = (selectedRoom.occupants || []).filter(occupantName => {
+                    const existingTenant = (storage.tenants || []).find(t => t.name === occupantName && t.house === house && t.room === room);
                     if (!existingTenant) return false;
-        
+
                     const existingTenantStartDate = new Date(existingTenant.startDate);
                     const existingTenantEndDate = existingTenant.endDate ? new Date(existingTenant.endDate) : null;
-        
+
                     return (
                         (newTenantEndDate === null || existingTenantStartDate <= newTenantEndDate) &&
                         (existingTenantEndDate === null || newTenantStartDate <= existingTenantEndDate)
                     );
                 });
-        
+
                 if (overlappingTenants.length >= selectedRoom.capacity) {
                     alert('Room is at full capacity during the specified period!');
                     return;
                 }
-        
+
                 storage.tenants.push({ name, startDate, endDate, house, room, rent, roommates });
                 selectedRoom.occupants.push(name);
-                saveData(currentUser);
+                await saveData(currentUser);
                 showSection('tenants');
             });
-        
+
             const houseSelect = document.getElementById('tenantHouse');
             const roomSelect = document.getElementById('tenantRoom');
             if (houseSelect && roomSelect) {
                 houseSelect.addEventListener('change', () => {
-                    const selectedHouse = storage.houses.find(h => h.address === houseSelect.value);
+                    const selectedHouse = (storage.houses || []).find(h => h.address === houseSelect.value);
                     roomSelect.innerHTML = '<option value="">Select Room</option>';
                     if (selectedHouse) {
-                        selectedHouse.rooms.forEach(room => {
+                        (selectedHouse.rooms || []).forEach(room => {
                             const option = document.createElement('option');
                             option.value = room.number;
-                            option.text = `Room ${room.number} (Capacity: ${room.capacity}, Occupants: ${room.occupants.length})`;
+                            option.text = `Room ${room.number} (Capacity: ${room.capacity}, Occupants: ${(room.occupants || []).length})`;
                             roomSelect.appendChild(option);
                         });
                     }
@@ -815,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (section === 'payments') {
-            storage.houses.forEach(house => {
+            (storage.houses || []).forEach(house => {
                 const paymentMonthInput = document.getElementById(`paymentMonth-${house.address}`);
                 if (paymentMonthInput) {
                     flatpickr(paymentMonthInput, {
@@ -854,7 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (section === 'invoices') {
-            document.getElementById('addInvoiceForm')?.addEventListener('submit', (e) => {
+            document.getElementById('addInvoiceForm')?.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const type = document.getElementById('invoiceType')?.value.trim();
                 const amount = parseFloat(document.getElementById('invoiceAmount')?.value);
@@ -866,45 +881,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 storage.invoices.push({ type, amount, paid });
-                saveData(currentUser);
+                await saveData(currentUser);
                 showSection('invoices');
             });
         }
     }
 
-    window.removeHouse = function(address) {
-        storage.houses = storage.houses.filter(h => h.address !== address);
-        storage.tenants = storage.tenants.filter(t => t.house !== address);
-        storage.payments = storage.payments.filter(p => p.house !== address);
-        saveData(currentUser);
+    window.removeHouse = async function(address) {
+        storage.houses = (storage.houses || []).filter(h => h.address !== address);
+        storage.tenants = (storage.tenants || []).filter(t => t.house !== address);
+        storage.payments = (storage.payments || []).filter(p => p.house !== address);
+        await saveData(currentUser);
         showSection('settings');
     };
 
-    window.removeTenant = function(name, house, room) {
-        storage.tenants = storage.tenants.filter(t => t.name !== name || t.house !== house || t.room !== room);
-        const selectedHouse = storage.houses.find(h => h.address === house);
+    window.removeTenant = async function(name, house, room) {
+        storage.tenants = (storage.tenants || []).filter(t => t.name !== name || t.house !== house || t.room !== room);
+        const selectedHouse = (storage.houses || []).find(h => h.address === house);
         if (selectedHouse) {
-            const selectedRoom = selectedHouse.rooms.find(r => r.number === room);
+            const selectedRoom = (selectedHouse.rooms || []).find(r => r.number === room);
             if (selectedRoom) {
-                selectedRoom.occupants = selectedRoom.occupants.filter(o => o !== name);
+                selectedRoom.occupants = (selectedRoom.occupants || []).filter(o => o !== name);
             }
         }
-        storage.payments = storage.payments.map(p => ({
+        storage.payments = (storage.payments || []).map(p => ({
             ...p,
-            payments: p.payments.map(pp => ({
+            payments: (p.payments || []).map(pp => ({
                 ...pp,
-                tenantPayments: pp.tenantPayments ? pp.tenantPayments.filter(tp => tp.name !== name) : []
+                tenantPayments: (pp.tenantPayments || []).filter(tp => tp.name !== name)
             }))
         }));
-        saveData(currentUser);
+        await saveData(currentUser);
         showSection('tenants');
     };
 
-    window.removePayment = function(houseAddress, monthYear) {
-        storage.payments = storage.payments.filter(p => 
+    window.removePayment = async function(houseAddress, monthYear) {
+        storage.payments = (storage.payments || []).filter(p => 
             !(p.house === houseAddress && p.monthYear === monthYear)
         );
-        saveData(currentUser);
+        await saveData(currentUser);
         const archiveList = document.getElementById(`archiveList-${houseAddress}`);
         if (archiveList) {
             renderArchive(houseAddress);
@@ -913,7 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.showMonthlyPayments = function(monthYear) {
         const monthlyPaymentsContent = document.getElementById('monthlyPaymentsContent');
-        let contentHtml = storage.houses.map(h => `
+        let contentHtml = (storage.houses || []).map(h => `
             <div class="bg-white p-4 rounded-lg shadow-md mb-4">
                 <h4 class="text-md font-semibold text-gray-800 mb-2">${h.address}</h4>
                 <table class="w-full border-collapse border border-gray-300">
@@ -926,13 +941,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${storage.payments.filter(p => p.house === h.address && p.monthYear === monthYear).map(p => `
-                            ${p.payments.map(payment => `
+                        ${(storage.payments || []).filter(p => p.house === h.address && p.monthYear === monthYear).map(p => `
+                            ${(p.payments || []).map(payment => `
                                 <tr>
                                     <td class="border border-gray-300 p-2">${payment.utilityType}</td>
-                                    <td class="border border-gray-300 p-2">${payment.billAmount.toFixed(2)}€</td>
+                                    <td class="border border-gray-300 p-2">${(payment.billAmount || 0).toFixed(2)}€</td>
                                     <td class="border border-gray-300 p-2">${payment.paid !== undefined ? (payment.paid ? '✓' : '✗') : '-'}</td>
-                                    <td class="border border-gray-300 p-2">${payment.amountPaid !== undefined ? payment.amountPaid.toFixed(2) + '€' : '-'}</td>
+                                    <td class="border border-gray-300 p-2">${payment.amountPaid !== undefined ? (payment.amountPaid || 0).toFixed(2) + '€' : '-'}</td>
                                 </tr>
                             `).join('')}
                         `).join('') || '<tr><td colspan="4" class="border border-gray-300 p-2 text-gray-700">No payments for this month.</td></tr>'}
@@ -947,10 +962,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.logout = function() {
-        localStorage.removeItem('currentUser');
-        nav.classList.add('hidden');
-        showAuth();
+    window.logout = async function() {
+        try {
+            await signOut(auth);
+            nav.classList.add('hidden');
+            showAuth();
+        } catch (error) {
+            console.error('Logout failed:', error);
+        }
     };
 
     function showAuth() {
@@ -966,11 +985,4 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
-
-    // Initialize with login if no user is logged in
-    if (!currentUser) {
-        showAuth();
-    } else {
-        showSection('settings');
-    }
 });
